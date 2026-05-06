@@ -11,18 +11,31 @@
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap'); 
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
         
-        /* Custom Scrollbar agar terlihat modern */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
         
-        /* Fix Canvas Responsiveness agar QR tidak gepeng */
         #canvas, #modal-canvas { width: 100%; display: flex; justify-content: center; overflow: hidden; padding: 10px; }
         #canvas canvas, #modal-canvas canvas { width: 100% !important; max-width: 280px !important; height: auto !important; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+
+        /* ── Stats table row hover ── */
+        #stats-body tr { transition: background 0.15s; }
+
+        /* ── Bar chart: min height so single bar is visible ── */
+        #statsChart { min-height: 220px; }
+
+        /* ── Pulse ring on total scan ── */
+        @keyframes pulse-ring {
+            0%   { box-shadow: 0 0 0 0 rgba(45,212,191,0.4); }
+            70%  { box-shadow: 0 0 0 18px rgba(45,212,191,0); }
+            100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); }
+        }
+        .pulse-ring { animation: pulse-ring 2s infinite; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200 min-h-screen">
 
+    <!-- Toast -->
     <div id="toast-overlay" class="fixed inset-0 z-[200] flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
         <div id="toast-card" class="bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl transform scale-90 transition-transform duration-300 max-w-sm w-full text-center relative mx-4">
@@ -36,6 +49,7 @@
         </div>
     </div>
 
+    <!-- QR Modal -->
     <div id="qr-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4">
         <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6 relative">
             <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
@@ -46,6 +60,7 @@
         </div>
     </div>
 
+    <!-- Redirect Screen -->
     <div id="redirect-screen" class="hidden fixed inset-0 bg-slate-900 z-50 flex flex-col items-center justify-center text-center">
         <div class="w-16 h-16 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-6"></div>
         <h2 class="text-2xl font-bold text-white mt-4">Mengalihkan...</h2>
@@ -55,6 +70,7 @@
     <div id="main-app" class="p-4 md:p-8 max-w-7xl mx-auto">
         <div class="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden min-h-[85vh] flex flex-col">
             
+            <!-- Header -->
             <div class="bg-slate-900 border-b border-slate-800 p-6 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div class="flex items-center gap-2">
                     <div class="bg-gradient-to-r from-teal-500 to-blue-500 w-10 h-10 rounded-lg flex items-center justify-center text-slate-900 font-bold text-xl">QR</div>
@@ -66,6 +82,7 @@
                 </div>
             </div>
 
+            <!-- Tab: Buat QR -->
             <div id="tab-gen" class="p-6 md:p-8 block">
                 <div class="flex flex-col lg:flex-row gap-8 h-full">
                     <div class="lg:w-5/12 space-y-6 overflow-y-auto max-h-[70vh] pr-2 custom-scrollbar">
@@ -76,7 +93,6 @@
                                 <div><label class="text-xs font-bold text-slate-400 uppercase">URL Tujuan</label><input type="text" id="target-url" placeholder="https://..." class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none" oninput="updateLiveQR()"></div>
                             </div>
                         </div>
-
                         <div class="bg-slate-800/50 p-5 rounded-xl border border-slate-700/50">
                             <h3 class="text-sm font-bold text-blue-400 mb-4">Desain</h3>
                             <div class="mb-4">
@@ -92,11 +108,9 @@
                                 <select id="corner-type" onchange="updateLiveQR()" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-white text-xs"><option value="extra-rounded">Halus</option><option value="square">Kotak</option><option value="dot">Titik</option></select>
                             </div>
                         </div>
-
                         <button onclick="saveAndGenerate()" id="btn-create" class="w-full bg-gradient-to-r from-teal-500 to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition transform active:scale-[0.98]">Mulai Proses</button>
                         <div id="loading-msg" class="hidden text-center text-teal-400 text-xs animate-pulse mt-2">Menghubungi Server Google...</div>
                     </div>
-
                     <div class="lg:w-7/12 flex flex-col items-center justify-center bg-slate-950 rounded-xl border border-slate-800 p-8 relative">
                         <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#2dd4bf_1px,transparent_1px)] [background-size:20px_20px]"></div>
                         <div class="relative z-10 flex flex-col items-center">
@@ -108,85 +122,123 @@
                 </div>
             </div>
 
-            <div id="tab-stats" class="p-8 hidden">
+            <!-- ═══════════════════════════════════════════════
+                 Tab: STATISTIK  (dimodifikasi)
+            ════════════════════════════════════════════════ -->
+            <div id="tab-stats" class="p-6 md:p-8 hidden">
+
+                <!-- Toolbar -->
                 <div class="flex justify-between items-center mb-6">
-                    <button onclick="fetchStats()" id="btn-refresh" class="text-xs bg-teal-500/10 text-teal-400 px-4 py-2 rounded-full border border-teal-500/20 hover:bg-teal-500/20 transition">↻ Muat Ulang Data</button>
-                    <span id="live-indicator" class="text-[10px] text-slate-500 animate-pulse hidden">● Live Update</span>
+                    <button onclick="fetchStats()" id="btn-refresh"
+                        class="text-xs bg-teal-500/10 text-teal-400 px-4 py-2 rounded-full border border-teal-500/20 hover:bg-teal-500/20 transition flex items-center gap-2">
+                        <span id="refresh-icon">↻</span> Muat Ulang Data
+                    </button>
+                    <span id="live-indicator" class="text-[10px] text-teal-400 animate-pulse hidden flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 bg-teal-400 rounded-full inline-block animate-ping"></span> Live Update
+                    </span>
                 </div>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+
+                <!-- ── Baris atas: Summary Cards + Chart ── -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+
+                    <!-- Chart: sekarang bar chart, lebih jelas untuk data sedikit -->
                     <div class="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700">
-                        <h3 class="text-lg font-bold text-white mb-4">Grafik Kunjungan</h3>
-                        <div class="h-64"><canvas id="statsChart"></canvas></div>
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-base font-bold text-white">Grafik Kunjungan</h3>
+                            <span id="chart-empty-hint" class="text-[10px] text-slate-500 hidden">Belum ada data</span>
+                        </div>
+                        <div class="relative h-56">
+                            <canvas id="statsChart"></canvas>
+                            <!-- Placeholder saat kosong -->
+                            <div id="chart-placeholder" class="hidden absolute inset-0 flex flex-col items-center justify-center text-slate-600">
+                                <svg class="w-12 h-12 mb-2 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 13l4-4 4 4 4-6 4 3"/></svg>
+                                <p class="text-xs">Belum ada scan yang tercatat</p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-gradient-to-br from-teal-500 to-blue-600 p-6 rounded-2xl text-white flex flex-col justify-center items-center shadow-lg">
-                        <p class="text-sm opacity-80">Total Scan</p>
-                        <h2 class="text-5xl font-bold mt-2" id="total-clicks">0</h2>
+
+                    <!-- Summary cards (kanan) -->
+                    <div class="flex flex-col gap-4">
+                        <!-- Total Scan -->
+                        <div class="flex-1 bg-gradient-to-br from-teal-600 to-blue-600 p-5 rounded-2xl text-white flex flex-col justify-center items-center shadow-lg pulse-ring">
+                            <p class="text-xs font-semibold opacity-75 tracking-widest uppercase mb-1">Total Scan</p>
+                            <h2 class="text-5xl font-extrabold leading-none" id="total-clicks">0</h2>
+                            <p class="text-xs opacity-60 mt-2">Semua waktu</p>
+                        </div>
+                        <!-- Total Link -->
+                        <div class="flex-1 bg-slate-800 border border-slate-700 p-5 rounded-2xl text-white flex flex-col justify-center items-center">
+                            <p class="text-xs font-semibold text-slate-400 tracking-widest uppercase mb-1">Total Link Aktif</p>
+                            <h2 class="text-4xl font-extrabold text-blue-400 leading-none" id="total-links">0</h2>
+                            <p class="text-xs text-slate-500 mt-2">Link tersimpan</p>
+                        </div>
+                        <!-- Link Terpopuler -->
+                        <div class="flex-1 bg-slate-800 border border-slate-700 p-5 rounded-2xl">
+                            <p class="text-xs font-semibold text-slate-400 tracking-widest uppercase mb-2">🏆 Terpopuler</p>
+                            <p class="text-sm font-bold text-white truncate" id="top-link-name">—</p>
+                            <p class="text-xs text-teal-400 mt-1" id="top-link-clicks">0 scan</p>
+                        </div>
                     </div>
                 </div>
+
+                <!-- ── Tabel detail ── -->
                 <div class="overflow-hidden rounded-xl border border-slate-700 shadow-xl">
                     <table class="w-full text-left bg-slate-800">
                         <thead class="bg-slate-700/80 text-slate-400 text-xs uppercase backdrop-blur">
-                            <tr><th class="p-4">Tanggal</th><th class="p-4">Detail Link</th><th class="p-4 text-center">Jml Scan</th><th class="p-4 text-center">Aksi</th></tr>
+                            <tr>
+                                <th class="p-4">Tanggal</th>
+                                <th class="p-4">Detail Link</th>
+                                <th class="p-4 text-center">Jml Scan</th>
+                                <th class="p-4 text-center">Progres</th>
+                                <th class="p-4 text-center">Aksi</th>
+                            </tr>
                         </thead>
-                        <tbody id="stats-body" class="text-sm divide-y divide-slate-700 text-slate-300">
-                            <tr><td colspan="4" class="p-8 text-center text-slate-500">Memuat data...</td></tr>
+                        <tbody id="stats-body" class="text-sm divide-y divide-slate-700/60 text-slate-300">
+                            <tr><td colspan="5" class="p-10 text-center text-slate-500">Memuat data...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
+            <!-- ═══ End Tab Stats ═══ -->
+
         </div>
     </div>
 
     <script>
         // ===============================================
-        // KONFIGURASI PENTING (WAJIB DIISI)
+        // KONFIGURASI
         // ===============================================
-        
-        // 1. Masukkan URL Web App dari Google Apps Script (Deploy > Web App)
         const GAS_URL = "https://script.google.com/macros/s/AKfycbzzn3sDhh25DvWlPR2LGaVuMUT06dh3WFj5AdVTQyqLkSI6ItrQBltD42ayUcclZdDN/exec"; 
-        
-        // 2. Masukkan URL Hosting Anda (Misal: https://username.github.io/repo/)
-        // Jika masih di localhost, biarkan saja, script akan otomatis deteksi.
         const GITHUB_PAGES_URL = "https://dyanhardyanti7.github.io/e-gizi/"; 
-        
         // ===============================================
-        
+
         let currentLogo = null;
         let refreshInterval = null;
 
-        // Inisialisasi Engine QR Code
         const qrCode = new QRCodeStyling({ width: 1000, height: 1000, dotsOptions: { color: "#14b8a6", type: "rounded" }, backgroundOptions: { color: "#ffffff" }, cornersSquareOptions: { type: "extra-rounded", color: "#0f172a" }, imageOptions: { crossOrigin: "anonymous", margin: 10 } });
         const modalQrCode = new QRCodeStyling({ width: 1000, height: 1000, dotsOptions: { color: "#14b8a6", type: "rounded" }, backgroundOptions: { color: "#ffffff" }, cornersSquareOptions: { type: "extra-rounded", color: "#0f172a" }, imageOptions: { crossOrigin: "anonymous", margin: 10 } });
 
-        // Logic saat halaman dimuat
         window.onload = function() {
             const urlParams = new URLSearchParams(window.location.search);
-            // Cek apakah ada parameter '?r=' di URL (Tanda user sedang scan QR)
             if (urlParams.get('r')) {
                 document.getElementById('main-app').style.display = 'none';
                 document.getElementById('redirect-screen').style.display = 'flex';
                 handleRedirect(urlParams.get('r'));
             } else {
-                // Jika tidak ada, tampilkan Dashboard
                 qrCode.append(document.getElementById("canvas"));
                 adjustCanvas();
             }
         };
 
-        // Fix ukuran QR agar responsif di HP
         function adjustCanvas() { setTimeout(() => { document.querySelectorAll("canvas").forEach(el => { el.style.width = "100%"; el.style.maxWidth = "280px"; el.style.height = "auto"; el.style.display = "block"; }); }, 100); }
 
-        // --- SISTEM NOTIFIKASI (TOAST) ---
         function showToast(title, message, type = 'success') {
             const overlay = document.getElementById('toast-overlay');
             const card = document.getElementById('toast-card');
             const iconSuccess = document.getElementById('toast-icon-success');
             const iconError = document.getElementById('toast-icon-error');
             const iconBg = document.getElementById('toast-icon-bg');
-            
             document.getElementById('toast-title').innerText = title;
             document.getElementById('toast-message').innerText = message;
-
             if (type === 'success') {
                 iconSuccess.classList.remove('hidden'); iconError.classList.add('hidden');
                 iconBg.className = "mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-teal-500/10 mb-4 ring-1 ring-teal-500/50";
@@ -194,11 +246,9 @@
                 iconSuccess.classList.add('hidden'); iconError.classList.remove('hidden');
                 iconBg.className = "mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-500/10 mb-4 ring-1 ring-red-500/50";
             }
-
             overlay.classList.remove('pointer-events-none', 'opacity-0');
             card.classList.remove('scale-90'); card.classList.add('scale-100');
         }
-
         function closeToast() {
             const overlay = document.getElementById('toast-overlay');
             const card = document.getElementById('toast-card');
@@ -206,18 +256,12 @@
             setTimeout(() => { overlay.classList.add('pointer-events-none'); }, 300);
         }
 
-        // --- LOGIC LOGO (CLIENT SIDE) ---
         function handleLogo(event) {
             const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => { currentLogo = e.target.result; updateLiveQR(); }
-                reader.readAsDataURL(file);
-            }
+            if (file) { const reader = new FileReader(); reader.onload = (e) => { currentLogo = e.target.result; updateLiveQR(); }; reader.readAsDataURL(file); }
         }
         function removeLogo() { currentLogo = null; document.getElementById('logo-input').value = ""; updateLiveQR(); }
 
-        // Update tampilan QR Real-time
         function updateLiveQR() {
             const text = document.getElementById('target-url').value || "https://google.com";
             const colorDots = document.getElementById('color-dots').value;
@@ -227,57 +271,32 @@
             qrCode.update({ data: text, image: currentLogo, dotsOptions: { color: colorDots, type: dotType }, backgroundOptions: { color: colorBg }, cornersSquareOptions: { color: colorDots, type: cornerType } });
         }
 
-        // --- SIMPAN KE SERVER ---
         async function saveAndGenerate() {
             const name = document.getElementById('link-name').value;
             const url = document.getElementById('target-url').value;
             if (!url) { showToast("Data Kurang", "Isi URL tujuannya dulu bosku!", "error"); return; }
-
             const btn = document.getElementById('btn-create');
             btn.disabled = true;
             document.getElementById('loading-msg').classList.remove('hidden');
-
             try {
-                // Request ke Google Apps Script (GET)
                 const finalUrl = `${GAS_URL}?action=create&url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`;
                 const response = await fetch(finalUrl);
                 const data = await response.json();
-
                 if (data.status === 'success') {
-                    // Cek apakah di localhost atau hosting
                     let baseUrl = GITHUB_PAGES_URL;
-                    if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") {
-                        baseUrl = window.location.href.split('?')[0];
-                    }
+                    if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") { baseUrl = window.location.href.split('?')[0]; }
                     const trackingUrl = `${baseUrl}?r=${data.id}`;
-
-                    // Update QR Final dengan Link Tracking
                     const colorDots = document.getElementById('color-dots').value;
                     const colorBg = document.getElementById('color-bg').value;
                     const dotType = document.getElementById('dot-type').value;
                     const cornerType = document.getElementById('corner-type').value;
-
-                    qrCode.update({
-                        data: trackingUrl,
-                        image: currentLogo,
-                        dotsOptions: { color: colorDots, type: dotType },
-                        backgroundOptions: { color: colorBg },
-                        cornersSquareOptions: { color: colorDots, type: cornerType }
-                    });
-
+                    qrCode.update({ data: trackingUrl, image: currentLogo, dotsOptions: { color: colorDots, type: dotType }, backgroundOptions: { color: colorBg }, cornersSquareOptions: { color: colorDots, type: cornerType } });
                     showToast("Berhasil!", `Link "${name}" telah aktif.`, "success");
-                } else {
-                    showToast("Gagal", data.message, "error");
-                }
-            } catch (e) {
-                showToast("Error Koneksi", e.message, "error");
-            } finally {
-                btn.disabled = false;
-                document.getElementById('loading-msg').classList.add('hidden');
-            }
+                } else { showToast("Gagal", data.message, "error"); }
+            } catch (e) { showToast("Error Koneksi", e.message, "error"); }
+            finally { btn.disabled = false; document.getElementById('loading-msg').classList.add('hidden'); }
         }
 
-        // Fungsi Redirect saat user scan
         async function handleRedirect(id) {
             try {
                 const response = await fetch(`${GAS_URL}?action=track&id=${id}`);
@@ -289,26 +308,18 @@
 
         async function deleteLink(id) {
             if (!confirm("Hapus data ini permanen?")) return;
-            try {
-                await fetch(`${GAS_URL}?action=delete&id=${id}`);
-                fetchStats(false);
-                showToast("Terhapus", "Data berhasil dihapus.", "success");
-            } catch (e) { showToast("Error", "Gagal menghapus.", "error"); }
+            try { await fetch(`${GAS_URL}?action=delete&id=${id}`); fetchStats(false); showToast("Terhapus", "Data berhasil dihapus.", "success"); }
+            catch (e) { showToast("Error", "Gagal menghapus.", "error"); }
         }
 
-        // Tampilkan Modal QR
         function viewQR(id, name) {
             let baseUrl = GITHUB_PAGES_URL;
-            if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") {
-                baseUrl = window.location.href.split('?')[0];
-            }
+            if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") { baseUrl = window.location.href.split('?')[0]; }
             const fullUrl = `${baseUrl}?r=${id}`;
             document.getElementById('modal-title').innerText = name;
             document.getElementById('modal-url').innerText = fullUrl;
-            
             const container = document.getElementById('modal-canvas');
             container.innerHTML = ""; modalQrCode.append(container); modalQrCode.update({ data: fullUrl });
-            
             document.getElementById('qr-modal').classList.remove('hidden');
             setTimeout(() => { document.querySelector('#modal-canvas canvas').style.width = "100%"; }, 50);
         }
@@ -316,79 +327,193 @@
         function downloadModalQR() { modalQrCode.download({ name: "QR_Code", extension: "png" }); }
         function downloadQR() { qrCode.download({ name: "QR_Code_Custom", extension: "png" }); }
 
-        // --- DASHBOARD STATISTIK ---
+        // ═══════════════════════════════════════════════
+        //  STATISTIK — versi baru
+        // ═══════════════════════════════════════════════
         async function fetchStats(isBackground = false) {
             const tbody = document.getElementById('stats-body');
             const btn = document.getElementById('btn-refresh');
-            if(!isBackground) { tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-slate-500">Loading...</td></tr>'; btn.innerText = "Loading..."; }
-            
+            const icon = document.getElementById('refresh-icon');
+
+            if (!isBackground) {
+                tbody.innerHTML = '<tr><td colspan="5" class="p-10 text-center text-slate-500 animate-pulse">Memuat data...</td></tr>';
+                icon.classList.add('animate-spin');
+                btn.disabled = true;
+            }
+
             try {
                 const res = await fetch(`${GAS_URL}?action=stats&t=${Date.now()}`);
                 const data = await res.json();
-                let html = "", total = 0, labels = [], clicks = [];
-                
-                data.reverse().forEach(row => {
-                    total += parseInt(row.clicks);
-                    labels.push(row.name); clicks.push(row.clicks);
+
+                // Hitung total & cari top link
+                let total = 0, maxClicks = 0, topName = "—", topClicks = 0;
+                data.forEach(row => {
+                    const c = parseInt(row.clicks) || 0;
+                    total += c;
+                    if (c > maxClicks) { maxClicks = c; topName = row.name; topClicks = c; }
+                });
+
+                document.getElementById('total-clicks').innerText = total;
+                document.getElementById('total-links').innerText = data.length;
+                document.getElementById('top-link-name').innerText = topName;
+                document.getElementById('top-link-clicks').innerText = `${topClicks} scan`;
+
+                // Urutkan terbaru di atas untuk tabel, terlama di kiri untuk chart
+                const forChart = [...data].reverse();
+                const labels  = forChart.map(r => r.name || '(tanpa nama)');
+                const clicks  = forChart.map(r => parseInt(r.clicks) || 0);
+                updateChart(labels, clicks, maxClicks);
+
+                // ── Tampilkan/sembunyikan placeholder chart ──
+                const hasData = clicks.some(v => v > 0);
+                document.getElementById('chart-placeholder').classList.toggle('hidden', hasData);
+                document.getElementById('statsChart').style.opacity = hasData ? '1' : '0';
+
+                // ── Tabel ──
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="p-10 text-center text-slate-500">Belum ada data.</td></tr>';
+                    return;
+                }
+
+                let html = "";
+                data.forEach(row => {
+                    const c = parseInt(row.clicks) || 0;
+                    const pct = maxClicks > 0 ? Math.round((c / maxClicks) * 100) : 0;
+                    // Badge warna berdasarkan jumlah scan
+                    const badge = c === 0
+                        ? 'bg-slate-700 text-slate-400 border-slate-600'
+                        : c >= 10
+                            ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
+                            : 'bg-blue-500/20 text-blue-300 border-blue-500/40';
+
                     html += `
-                        <tr class="hover:bg-slate-800/50 border-b border-slate-700 last:border-0">
-                            <td class="p-4 text-xs text-slate-400">${row.date.split(',')[0]}</td>
-                            <td class="p-4"><div class="font-bold text-white">${row.name}</div><div class="text-xs text-teal-500 truncate w-32">${row.url}</div></td>
-                            <td class="p-4 text-center"><span class="bg-slate-800 text-teal-400 px-3 py-1 rounded-lg font-bold border border-teal-500/30">${row.clicks}</span></td>
+                        <tr class="hover:bg-slate-700/30 transition-colors">
+                            <td class="p-4 text-xs text-slate-400 whitespace-nowrap">${row.date ? row.date.split(',')[0] : '—'}</td>
+                            <td class="p-4">
+                                <div class="font-semibold text-white text-sm">${row.name || '(tanpa nama)'}</div>
+                                <div class="text-xs text-teal-500/80 truncate max-w-[180px] mt-0.5">${row.url}</div>
+                            </td>
                             <td class="p-4 text-center">
-                                <button onclick="viewQR('${row.id}','${row.name}')" class="text-blue-400 hover:text-white mr-2 text-lg">👁️</button>
-                                <button onclick="deleteLink('${row.id}')" class="text-red-400 hover:text-white text-lg">🗑️</button>
+                                <span class="inline-block px-3 py-1 rounded-lg text-sm font-bold border ${badge}">
+                                    ${c}
+                                </span>
+                            </td>
+                            <td class="p-4 min-w-[120px]">
+                                <div class="flex items-center gap-2">
+                                    <div class="flex-1 bg-slate-700 rounded-full h-2 overflow-hidden">
+                                        <div class="h-2 rounded-full transition-all duration-700 ${c === 0 ? 'bg-slate-600' : 'bg-gradient-to-r from-teal-500 to-blue-500'}"
+                                             style="width: ${pct}%"></div>
+                                    </div>
+                                    <span class="text-[10px] text-slate-500 w-8 text-right">${pct}%</span>
+                                </div>
+                            </td>
+                            <td class="p-4 text-center whitespace-nowrap">
+                                <button onclick="viewQR('${row.id}','${row.name}')" class="text-blue-400 hover:text-white mr-2 text-base transition" title="Lihat QR">👁️</button>
+                                <button onclick="deleteLink('${row.id}')" class="text-red-400 hover:text-white text-base transition" title="Hapus">🗑️</button>
                             </td>
                         </tr>
                     `;
                 });
-                tbody.innerHTML = html; document.getElementById('total-clicks').innerText = total; updateChart(labels, clicks);
-            } catch(e) { if(!isBackground) console.error(e); } finally { btn.innerText = "↻ Muat Ulang Data"; }
+                tbody.innerHTML = html;
+
+            } catch(e) {
+                if (!isBackground) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="p-10 text-center text-red-400 text-xs">Gagal memuat. Cek koneksi & coba muat ulang.</td></tr>';
+                }
+            } finally {
+                icon.classList.remove('animate-spin');
+                btn.disabled = false;
+            }
         }
 
+        // ── Chart (Bar) ──
+        // Pakai bar chart: jauh lebih readable untuk n=1 data pun
         let myChart = null;
-        function updateChart(labels, data) {
+        function updateChart(labels, data, maxVal) {
             const ctx = document.getElementById('statsChart').getContext('2d');
-            // Efek Neon Glow
-            let gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(45, 212, 191, 0.5)'); 
-            gradient.addColorStop(1, 'rgba(45, 212, 191, 0.0)'); 
-            
-            if(myChart) { myChart.data.labels = labels; myChart.data.datasets[0].data = data; myChart.update(); }
-            else {
-                myChart = new Chart(ctx, {
-                    type: 'line',
-                    data: { 
-                        labels: labels, 
-                        datasets: [{ 
-                            label: 'Jumlah Scan', 
-                            data: data, 
-                            borderColor: '#2dd4bf', 
-                            backgroundColor: gradient, 
-                            fill: true, 
-                            tension: 0.4, 
-                            borderWidth: 3,
-                            pointBackgroundColor: '#0f172a',
-                            pointBorderColor: '#2dd4bf',
-                            pointBorderWidth: 2,
-                            pointRadius: 4, 
-                            pointHoverRadius: 7
-                        }] 
+
+            // Y max: minimal 5 agar grafik tidak gepeng saat nilai kecil
+            const yMax = Math.max(maxVal + Math.ceil(maxVal * 0.3), 5);
+
+            const palette = data.map(v =>
+                v === 0 ? 'rgba(51,65,85,0.8)' : 'rgba(45,212,191,0.85)'
+            );
+            const borderPalette = data.map(v =>
+                v === 0 ? '#334155' : '#2dd4bf'
+            );
+
+            const cfg = {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Jumlah Scan',
+                        data,
+                        backgroundColor: palette,
+                        borderColor: borderPalette,
+                        borderWidth: 1.5,
+                        borderRadius: 8,
+                        borderSkipped: false,
+                        // Tambah highlight bar terpopuler
+                        hoverBackgroundColor: data.map(() => 'rgba(45,212,191,1)')
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 600, easing: 'easeOutQuart' },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            titleColor: '#f1f5f9',
+                            bodyColor: '#94a3b8',
+                            padding: 12,
+                            callbacks: {
+                                label: ctx => ` ${ctx.raw} scan`
+                            }
+                        }
                     },
-                    options: { 
-                        responsive: true, 
-                        maintainAspectRatio: false, 
-                        plugins: { legend: {display:false} }, 
-                        scales: { 
-                            y: { 
-                                beginAtZero: true, 
-                                grid: { color:'rgba(51, 65, 85, 0.2)', borderDash:[5,5] }, 
-                                ticks: { color: '#94a3b8', precision: 0, maxTicksLimit: 6 } 
-                            }, 
-                            x: { grid: { display:false }, ticks: { color: '#94a3b8' } } 
-                        } 
-                    } 
-                });
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            suggestedMax: yMax,        // ← kunci: sumbu Y punya ruang meski data = 1
+                            grid: { color: 'rgba(51,65,85,0.4)', drawBorder: false },
+                            ticks: {
+                                color: '#64748b',
+                                precision: 0,
+                                maxTicksLimit: 6,
+                                font: { size: 11 }
+                            }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: { size: 11 },
+                                maxRotation: 30,
+                                // Potong label panjang agar tidak tumpuk
+                                callback: function(val, idx) {
+                                    const label = this.getLabelForValue(val);
+                                    return label.length > 14 ? label.slice(0, 12) + '…' : label;
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            if (myChart) {
+                myChart.data.labels = labels;
+                myChart.data.datasets[0].data = data;
+                myChart.data.datasets[0].backgroundColor = palette;
+                myChart.data.datasets[0].borderColor = borderPalette;
+                myChart.options.scales.y.suggestedMax = yMax;
+                myChart.update();
+            } else {
+                myChart = new Chart(ctx, cfg);
             }
         }
 
@@ -396,19 +521,23 @@
             const gen = document.getElementById('tab-gen'), stats = document.getElementById('tab-stats');
             const btnGen = document.getElementById('btn-tab-gen'), btnStats = document.getElementById('btn-tab-stats');
             const indicator = document.getElementById('live-indicator');
-            
-            if(tab === 'gen') {
+
+            if (tab === 'gen') {
                 gen.classList.remove('hidden'); stats.classList.add('hidden');
-                btnGen.classList.replace('text-slate-400','bg-teal-500'); btnGen.classList.replace('hover:text-white','text-slate-900');
-                btnStats.classList.replace('bg-teal-500','text-slate-400'); btnStats.classList.replace('text-slate-900','hover:text-white');
-                if(refreshInterval) clearInterval(refreshInterval);
+                btnGen.classList.add('bg-teal-500', 'text-slate-900', 'shadow-lg');
+                btnGen.classList.remove('text-slate-400', 'hover:text-white');
+                btnStats.classList.remove('bg-teal-500', 'text-slate-900', 'shadow-lg');
+                btnStats.classList.add('text-slate-400', 'hover:text-white');
+                if (refreshInterval) clearInterval(refreshInterval);
                 indicator.classList.add('hidden');
             } else {
                 gen.classList.add('hidden'); stats.classList.remove('hidden');
-                btnGen.classList.replace('bg-teal-500','text-slate-400'); btnGen.classList.replace('text-slate-900','hover:text-white');
-                btnStats.classList.replace('text-slate-400','bg-teal-500'); btnStats.classList.replace('hover:text-white','text-slate-900');
+                btnStats.classList.add('bg-teal-500', 'text-slate-900', 'shadow-lg');
+                btnStats.classList.remove('text-slate-400', 'hover:text-white');
+                btnGen.classList.remove('bg-teal-500', 'text-slate-900', 'shadow-lg');
+                btnGen.classList.add('text-slate-400', 'hover:text-white');
                 fetchStats();
-                refreshInterval = setInterval(() => fetchStats(true), 10000); // Auto refresh tiap 10 detik
+                refreshInterval = setInterval(() => fetchStats(true), 10000);
                 indicator.classList.remove('hidden');
             }
         }
