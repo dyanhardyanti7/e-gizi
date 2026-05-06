@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Analytics Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript" src="https://unpkg.com/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap'); 
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        
+        /* Custom Scrollbar agar terlihat modern */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        
+        /* Fix Canvas Responsiveness agar QR tidak gepeng */
+        #canvas, #modal-canvas { width: 100%; display: flex; justify-content: center; overflow: hidden; padding: 10px; }
+        #canvas canvas, #modal-canvas canvas { width: 100% !important; max-width: 280px !important; height: auto !important; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-200 min-h-screen">
+
+    <div id="toast-overlay" class="fixed inset-0 z-[200] flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div id="toast-card" class="bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl transform scale-90 transition-transform duration-300 max-w-sm w-full text-center relative mx-4">
+            <div id="toast-icon-bg" class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-teal-500/10 mb-4 ring-1 ring-teal-500/50">
+                <svg id="toast-icon-success" class="h-8 w-8 text-teal-400 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                <svg id="toast-icon-error" class="h-8 w-8 text-red-400 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </div>
+            <h3 id="toast-title" class="text-xl font-bold text-white mb-2">Notifikasi</h3>
+            <p id="toast-message" class="text-sm text-slate-400 mb-6 leading-relaxed">Pesan...</p>
+            <button onclick="closeToast()" class="w-full bg-slate-800 hover:bg-slate-700 text-white font-semibold py-3 px-4 rounded-xl border border-slate-700 transition">Tutup</button>
+        </div>
+    </div>
+
+    <div id="qr-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6 relative">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">✕</button>
+            <h3 class="text-xl font-bold text-white mb-1" id="modal-title">Link</h3>
+            <p class="text-xs text-teal-400 font-mono mb-6 truncate" id="modal-url">...</p>
+            <div class="bg-white rounded-xl p-4 shadow-inner mb-6 flex justify-center"><div id="modal-canvas"></div></div>
+            <button onclick="downloadModalQR()" class="w-full bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold py-3 rounded-xl shadow-lg">Download QR</button>
+        </div>
+    </div>
+
+    <div id="redirect-screen" class="hidden fixed inset-0 bg-slate-900 z-50 flex flex-col items-center justify-center text-center">
+        <div class="w-16 h-16 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+        <h2 class="text-2xl font-bold text-white mt-4">Mengalihkan...</h2>
+        <p class="text-slate-400 text-sm mt-2">Mencatat scan Anda</p>
+    </div>
+
+    <div id="main-app" class="p-4 md:p-8 max-w-7xl mx-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden min-h-[85vh] flex flex-col">
+            
+            <div class="bg-slate-900 border-b border-slate-800 p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <div class="bg-gradient-to-r from-teal-500 to-blue-500 w-10 h-10 rounded-lg flex items-center justify-center text-slate-900 font-bold text-xl">QR</div>
+                    <div><h1 class="text-xl font-bold text-white">Analytics Pro</h1><p class="text-xs text-slate-500">by Ahmad Asyhari</p></div>
+                </div>
+                <div class="flex bg-slate-800 p-1 rounded-xl">
+                    <button onclick="switchTab('gen')" id="btn-tab-gen" class="px-6 py-2 rounded-lg text-sm font-bold bg-teal-500 text-slate-900 transition shadow-lg">Buat QR</button>
+                    <button onclick="switchTab('stats')" id="btn-tab-stats" class="px-6 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition">Statistik</button>
+                </div>
+            </div>
+
+            <div id="tab-gen" class="p-6 md:p-8 block">
+                <div class="flex flex-col lg:flex-row gap-8 h-full">
+                    <div class="lg:w-5/12 space-y-6 overflow-y-auto max-h-[70vh] pr-2 custom-scrollbar">
+                        <div class="bg-slate-800/50 p-5 rounded-xl border border-slate-700/50">
+                            <h3 class="text-sm font-bold text-teal-400 mb-4">Data Link</h3>
+                            <div class="space-y-4">
+                                <div><label class="text-xs font-bold text-slate-400 uppercase">Nama Link</label><input type="text" id="link-name" placeholder="Contoh: Absensi..." class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none"></div>
+                                <div><label class="text-xs font-bold text-slate-400 uppercase">URL Tujuan</label><input type="text" id="target-url" placeholder="https://..." class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white outline-none" oninput="updateLiveQR()"></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-800/50 p-5 rounded-xl border border-slate-700/50">
+                            <h3 class="text-sm font-bold text-blue-400 mb-4">Desain</h3>
+                            <div class="mb-4">
+                                <label class="text-xs font-bold text-slate-400 uppercase flex justify-between">Masukan Logo (Opsional) <span onclick="removeLogo()" class="text-[10px] text-red-400 cursor-pointer hover:text-red-300">Reset</span></label>
+                                <input type="file" id="logo-input" accept="image/*" class="w-full mt-1 text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:bg-slate-700 file:text-blue-400 cursor-pointer bg-slate-900 border border-slate-700" onchange="handleLogo(event)">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><label class="text-xs font-bold text-slate-400 uppercase">Warna QR</label><div class="flex items-center mt-1 bg-slate-900 rounded-lg p-1 border border-slate-700"><input type="color" id="color-dots" value="#14b8a6" class="w-8 h-8 cursor-pointer bg-transparent p-0" oninput="updateLiveQR()"></div></div>
+                                <div><label class="text-xs font-bold text-slate-400 uppercase">Background</label><div class="flex items-center mt-1 bg-slate-900 rounded-lg p-1 border border-slate-700"><input type="color" id="color-bg" value="#ffffff" class="w-8 h-8 cursor-pointer bg-transparent p-0" oninput="updateLiveQR()"></div></div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 mt-4">
+                                <select id="dot-type" onchange="updateLiveQR()" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-white text-xs"><option value="rounded">Rounded</option><option value="square">Kotak</option><option value="dots">Bulat</option><option value="classy">Classy</option></select>
+                                <select id="corner-type" onchange="updateLiveQR()" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-white text-xs"><option value="extra-rounded">Halus</option><option value="square">Kotak</option><option value="dot">Titik</option></select>
+                            </div>
+                        </div>
+
+                        <button onclick="saveAndGenerate()" id="btn-create" class="w-full bg-gradient-to-r from-teal-500 to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition transform active:scale-[0.98]">Mulai Proses</button>
+                        <div id="loading-msg" class="hidden text-center text-teal-400 text-xs animate-pulse mt-2">Menghubungi Server Google...</div>
+                    </div>
+
+                    <div class="lg:w-7/12 flex flex-col items-center justify-center bg-slate-950 rounded-xl border border-slate-800 p-8 relative">
+                        <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#2dd4bf_1px,transparent_1px)] [background-size:20px_20px]"></div>
+                        <div class="relative z-10 flex flex-col items-center">
+                            <div class="bg-white/5 p-6 rounded-2xl backdrop-blur-sm border border-white/10 shadow-2xl"><div id="canvas" class="bg-white p-4 rounded-xl shadow-inner"></div></div>
+                            <p class="text-xs text-slate-500 mt-6 text-center">Preview QR Code</p>
+                            <button onclick="downloadQR()" class="mt-4 px-6 py-2 bg-slate-800 text-teal-400 rounded-lg text-sm border border-slate-700 hover:bg-slate-700 transition">Download QR Code</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-stats" class="p-8 hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <button onclick="fetchStats()" id="btn-refresh" class="text-xs bg-teal-500/10 text-teal-400 px-4 py-2 rounded-full border border-teal-500/20 hover:bg-teal-500/20 transition">↻ Muat Ulang Data</button>
+                    <span id="live-indicator" class="text-[10px] text-slate-500 animate-pulse hidden">● Live Update</span>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    <div class="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                        <h3 class="text-lg font-bold text-white mb-4">Grafik Kunjungan</h3>
+                        <div class="h-64"><canvas id="statsChart"></canvas></div>
+                    </div>
+                    <div class="bg-gradient-to-br from-teal-500 to-blue-600 p-6 rounded-2xl text-white flex flex-col justify-center items-center shadow-lg">
+                        <p class="text-sm opacity-80">Total Scan</p>
+                        <h2 class="text-5xl font-bold mt-2" id="total-clicks">0</h2>
+                    </div>
+                </div>
+                <div class="overflow-hidden rounded-xl border border-slate-700 shadow-xl">
+                    <table class="w-full text-left bg-slate-800">
+                        <thead class="bg-slate-700/80 text-slate-400 text-xs uppercase backdrop-blur">
+                            <tr><th class="p-4">Tanggal</th><th class="p-4">Detail Link</th><th class="p-4 text-center">Jml Scan</th><th class="p-4 text-center">Aksi</th></tr>
+                        </thead>
+                        <tbody id="stats-body" class="text-sm divide-y divide-slate-700 text-slate-300">
+                            <tr><td colspan="4" class="p-8 text-center text-slate-500">Memuat data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===============================================
+        // KONFIGURASI PENTING (WAJIB DIISI)
+        // ===============================================
+        
+        // 1. Masukkan URL Web App dari Google Apps Script (Deploy > Web App)
+        const GAS_URL = "MASUKKAN_URL_WEB_APP_GOOGLE_SCRIPT_DISINI"; 
+        
+        // 2. Masukkan URL Hosting Anda (Misal: https://username.github.io/repo/)
+        // Jika masih di localhost, biarkan saja, script akan otomatis deteksi.
+        const GITHUB_PAGES_URL = "MASUKKAN_LINK_GITHUB_PAGES_DISINI"; 
+        
+        // ===============================================
+        
+        let currentLogo = null;
+        let refreshInterval = null;
+
+        // Inisialisasi Engine QR Code
+        const qrCode = new QRCodeStyling({ width: 1000, height: 1000, dotsOptions: { color: "#14b8a6", type: "rounded" }, backgroundOptions: { color: "#ffffff" }, cornersSquareOptions: { type: "extra-rounded", color: "#0f172a" }, imageOptions: { crossOrigin: "anonymous", margin: 10 } });
+        const modalQrCode = new QRCodeStyling({ width: 1000, height: 1000, dotsOptions: { color: "#14b8a6", type: "rounded" }, backgroundOptions: { color: "#ffffff" }, cornersSquareOptions: { type: "extra-rounded", color: "#0f172a" }, imageOptions: { crossOrigin: "anonymous", margin: 10 } });
+
+        // Logic saat halaman dimuat
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            // Cek apakah ada parameter '?r=' di URL (Tanda user sedang scan QR)
+            if (urlParams.get('r')) {
+                document.getElementById('main-app').style.display = 'none';
+                document.getElementById('redirect-screen').style.display = 'flex';
+                handleRedirect(urlParams.get('r'));
+            } else {
+                // Jika tidak ada, tampilkan Dashboard
+                qrCode.append(document.getElementById("canvas"));
+                adjustCanvas();
+            }
+        };
+
+        // Fix ukuran QR agar responsif di HP
+        function adjustCanvas() { setTimeout(() => { document.querySelectorAll("canvas").forEach(el => { el.style.width = "100%"; el.style.maxWidth = "280px"; el.style.height = "auto"; el.style.display = "block"; }); }, 100); }
+
+        // --- SISTEM NOTIFIKASI (TOAST) ---
+        function showToast(title, message, type = 'success') {
+            const overlay = document.getElementById('toast-overlay');
+            const card = document.getElementById('toast-card');
+            const iconSuccess = document.getElementById('toast-icon-success');
+            const iconError = document.getElementById('toast-icon-error');
+            const iconBg = document.getElementById('toast-icon-bg');
+            
+            document.getElementById('toast-title').innerText = title;
+            document.getElementById('toast-message').innerText = message;
+
+            if (type === 'success') {
+                iconSuccess.classList.remove('hidden'); iconError.classList.add('hidden');
+                iconBg.className = "mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-teal-500/10 mb-4 ring-1 ring-teal-500/50";
+            } else {
+                iconSuccess.classList.add('hidden'); iconError.classList.remove('hidden');
+                iconBg.className = "mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-500/10 mb-4 ring-1 ring-red-500/50";
+            }
+
+            overlay.classList.remove('pointer-events-none', 'opacity-0');
+            card.classList.remove('scale-90'); card.classList.add('scale-100');
+        }
+
+        function closeToast() {
+            const overlay = document.getElementById('toast-overlay');
+            const card = document.getElementById('toast-card');
+            card.classList.remove('scale-100'); card.classList.add('scale-90'); overlay.classList.add('opacity-0');
+            setTimeout(() => { overlay.classList.add('pointer-events-none'); }, 300);
+        }
+
+        // --- LOGIC LOGO (CLIENT SIDE) ---
+        function handleLogo(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => { currentLogo = e.target.result; updateLiveQR(); }
+                reader.readAsDataURL(file);
+            }
+        }
+        function removeLogo() { currentLogo = null; document.getElementById('logo-input').value = ""; updateLiveQR(); }
+
+        // Update tampilan QR Real-time
+        function updateLiveQR() {
+            const text = document.getElementById('target-url').value || "https://google.com";
+            const colorDots = document.getElementById('color-dots').value;
+            const colorBg = document.getElementById('color-bg').value;
+            const dotType = document.getElementById('dot-type').value;
+            const cornerType = document.getElementById('corner-type').value;
+            qrCode.update({ data: text, image: currentLogo, dotsOptions: { color: colorDots, type: dotType }, backgroundOptions: { color: colorBg }, cornersSquareOptions: { color: colorDots, type: cornerType } });
+        }
+
+        // --- SIMPAN KE SERVER ---
+        async function saveAndGenerate() {
+            const name = document.getElementById('link-name').value;
+            const url = document.getElementById('target-url').value;
+            if (!url) { showToast("Data Kurang", "Isi URL tujuannya dulu bosku!", "error"); return; }
+
+            const btn = document.getElementById('btn-create');
+            btn.disabled = true;
+            document.getElementById('loading-msg').classList.remove('hidden');
+
+            try {
+                // Request ke Google Apps Script (GET)
+                const finalUrl = `${GAS_URL}?action=create&url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`;
+                const response = await fetch(finalUrl);
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    // Cek apakah di localhost atau hosting
+                    let baseUrl = GITHUB_PAGES_URL;
+                    if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") {
+                        baseUrl = window.location.href.split('?')[0];
+                    }
+                    const trackingUrl = `${baseUrl}?r=${data.id}`;
+
+                    // Update QR Final dengan Link Tracking
+                    const colorDots = document.getElementById('color-dots').value;
+                    const colorBg = document.getElementById('color-bg').value;
+                    const dotType = document.getElementById('dot-type').value;
+                    const cornerType = document.getElementById('corner-type').value;
+
+                    qrCode.update({
+                        data: trackingUrl,
+                        image: currentLogo,
+                        dotsOptions: { color: colorDots, type: dotType },
+                        backgroundOptions: { color: colorBg },
+                        cornersSquareOptions: { color: colorDots, type: cornerType }
+                    });
+
+                    showToast("Berhasil!", `Link "${name}" telah aktif.`, "success");
+                } else {
+                    showToast("Gagal", data.message, "error");
+                }
+            } catch (e) {
+                showToast("Error Koneksi", e.message, "error");
+            } finally {
+                btn.disabled = false;
+                document.getElementById('loading-msg').classList.add('hidden');
+            }
+        }
+
+        // Fungsi Redirect saat user scan
+        async function handleRedirect(id) {
+            try {
+                const response = await fetch(`${GAS_URL}?action=track&id=${id}`);
+                const data = await response.json();
+                if (data.status === 'found') window.location.replace(data.url);
+                else { alert("Link Error / Tidak Ditemukan"); document.getElementById('redirect-screen').style.display = 'none'; document.getElementById('main-app').style.display = 'block'; }
+            } catch (error) { alert("Gagal koneksi internet."); }
+        }
+
+        async function deleteLink(id) {
+            if (!confirm("Hapus data ini permanen?")) return;
+            try {
+                await fetch(`${GAS_URL}?action=delete&id=${id}`);
+                fetchStats(false);
+                showToast("Terhapus", "Data berhasil dihapus.", "success");
+            } catch (e) { showToast("Error", "Gagal menghapus.", "error"); }
+        }
+
+        // Tampilkan Modal QR
+        function viewQR(id, name) {
+            let baseUrl = GITHUB_PAGES_URL;
+            if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") {
+                baseUrl = window.location.href.split('?')[0];
+            }
+            const fullUrl = `${baseUrl}?r=${id}`;
+            document.getElementById('modal-title').innerText = name;
+            document.getElementById('modal-url').innerText = fullUrl;
+            
+            const container = document.getElementById('modal-canvas');
+            container.innerHTML = ""; modalQrCode.append(container); modalQrCode.update({ data: fullUrl });
+            
+            document.getElementById('qr-modal').classList.remove('hidden');
+            setTimeout(() => { document.querySelector('#modal-canvas canvas').style.width = "100%"; }, 50);
+        }
+        function closeModal() { document.getElementById('qr-modal').classList.add('hidden'); }
+        function downloadModalQR() { modalQrCode.download({ name: "QR_Code", extension: "png" }); }
+        function downloadQR() { qrCode.download({ name: "QR_Code_Custom", extension: "png" }); }
+
+        // --- DASHBOARD STATISTIK ---
+        async function fetchStats(isBackground = false) {
+            const tbody = document.getElementById('stats-body');
+            const btn = document.getElementById('btn-refresh');
+            if(!isBackground) { tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-slate-500">Loading...</td></tr>'; btn.innerText = "Loading..."; }
+            
+            try {
+                const res = await fetch(`${GAS_URL}?action=stats&t=${Date.now()}`);
+                const data = await res.json();
+                let html = "", total = 0, labels = [], clicks = [];
+                
+                data.reverse().forEach(row => {
+                    total += parseInt(row.clicks);
+                    labels.push(row.name); clicks.push(row.clicks);
+                    html += `
+                        <tr class="hover:bg-slate-800/50 border-b border-slate-700 last:border-0">
+                            <td class="p-4 text-xs text-slate-400">${row.date.split(',')[0]}</td>
+                            <td class="p-4"><div class="font-bold text-white">${row.name}</div><div class="text-xs text-teal-500 truncate w-32">${row.url}</div></td>
+                            <td class="p-4 text-center"><span class="bg-slate-800 text-teal-400 px-3 py-1 rounded-lg font-bold border border-teal-500/30">${row.clicks}</span></td>
+                            <td class="p-4 text-center">
+                                <button onclick="viewQR('${row.id}','${row.name}')" class="text-blue-400 hover:text-white mr-2 text-lg">👁️</button>
+                                <button onclick="deleteLink('${row.id}')" class="text-red-400 hover:text-white text-lg">🗑️</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html; document.getElementById('total-clicks').innerText = total; updateChart(labels, clicks);
+            } catch(e) { if(!isBackground) console.error(e); } finally { btn.innerText = "↻ Muat Ulang Data"; }
+        }
+
+        let myChart = null;
+        function updateChart(labels, data) {
+            const ctx = document.getElementById('statsChart').getContext('2d');
+            // Efek Neon Glow
+            let gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(45, 212, 191, 0.5)'); 
+            gradient.addColorStop(1, 'rgba(45, 212, 191, 0.0)'); 
+            
+            if(myChart) { myChart.data.labels = labels; myChart.data.datasets[0].data = data; myChart.update(); }
+            else {
+                myChart = new Chart(ctx, {
+                    type: 'line',
+                    data: { 
+                        labels: labels, 
+                        datasets: [{ 
+                            label: 'Jumlah Scan', 
+                            data: data, 
+                            borderColor: '#2dd4bf', 
+                            backgroundColor: gradient, 
+                            fill: true, 
+                            tension: 0.4, 
+                            borderWidth: 3,
+                            pointBackgroundColor: '#0f172a',
+                            pointBorderColor: '#2dd4bf',
+                            pointBorderWidth: 2,
+                            pointRadius: 4, 
+                            pointHoverRadius: 7
+                        }] 
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        plugins: { legend: {display:false} }, 
+                        scales: { 
+                            y: { 
+                                beginAtZero: true, 
+                                grid: { color:'rgba(51, 65, 85, 0.2)', borderDash:[5,5] }, 
+                                ticks: { color: '#94a3b8', precision: 0, maxTicksLimit: 6 } 
+                            }, 
+                            x: { grid: { display:false }, ticks: { color: '#94a3b8' } } 
+                        } 
+                    } 
+                });
+            }
+        }
+
+        function switchTab(tab) {
+            const gen = document.getElementById('tab-gen'), stats = document.getElementById('tab-stats');
+            const btnGen = document.getElementById('btn-tab-gen'), btnStats = document.getElementById('btn-tab-stats');
+            const indicator = document.getElementById('live-indicator');
+            
+            if(tab === 'gen') {
+                gen.classList.remove('hidden'); stats.classList.add('hidden');
+                btnGen.classList.replace('text-slate-400','bg-teal-500'); btnGen.classList.replace('hover:text-white','text-slate-900');
+                btnStats.classList.replace('bg-teal-500','text-slate-400'); btnStats.classList.replace('text-slate-900','hover:text-white');
+                if(refreshInterval) clearInterval(refreshInterval);
+                indicator.classList.add('hidden');
+            } else {
+                gen.classList.add('hidden'); stats.classList.remove('hidden');
+                btnGen.classList.replace('bg-teal-500','text-slate-400'); btnGen.classList.replace('text-slate-900','hover:text-white');
+                btnStats.classList.replace('text-slate-400','bg-teal-500'); btnStats.classList.replace('hover:text-white','text-slate-900');
+                fetchStats();
+                refreshInterval = setInterval(() => fetchStats(true), 10000); // Auto refresh tiap 10 detik
+                indicator.classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
